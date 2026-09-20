@@ -1815,9 +1815,14 @@ def run_workflow_csv_command(
 		)
 		typer.echo()
 
-		# Load and validate CSV data
+		# Load and validate CSV data.
+		# Read every column as string so string-typed inputs keep their exact text. Pandas type
+		# inference otherwise turns a zip code like "01234" into int 1234 (leading zero lost) and a
+		# mixed column into floats ("1002" -> "1002.0"), which is then substituted into the workflow.
+		# Per-field type conversion below still coerces number/bool inputs, and empty cells remain
+		# NaN (pd.isna) so required-field validation is unchanged.
 		try:
-			df = pd.read_csv(csv_path)
+			df = pd.read_csv(csv_path, dtype=str)
 			if df.empty:
 				typer.secho('Error: CSV file is empty.', fg=typer.colors.RED)
 				raise typer.Exit(code=1)
