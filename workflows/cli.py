@@ -20,6 +20,7 @@ from workflow_use.mcp.service import get_mcp_server
 from workflow_use.recorder.service import RecordingService  # Added import
 from workflow_use.storage.service import WorkflowStorageService
 from workflow_use.workflow.service import Workflow
+from workflow_use.csv_inputs import convert_csv_value, load_workflow_csv
 
 # Placeholder for recorder functionality
 # from src.recorder.service import RecorderService
@@ -1815,14 +1816,12 @@ def run_workflow_csv_command(
 		)
 		typer.echo()
 
-		# Load and validate CSV data.
-		# Read every column as string so string-typed inputs keep their exact text. Pandas type
-		# inference otherwise turns a zip code like "01234" into int 1234 (leading zero lost) and a
-		# mixed column into floats ("1002" -> "1002.0"), which is then substituted into the workflow.
-		# Per-field type conversion below still coerces number/bool inputs, and empty cells remain
-		# NaN (pd.isna) so required-field validation is unchanged.
+		# Load and validate CSV data. All columns are read as strings so string-typed inputs keep
+		# their exact text (zip "01234", country code "NA", "null", ...); see
+		# workflow_use.csv_inputs.load_workflow_csv. Only empty cells are NaN, so the required-field
+		# check below is unchanged; number/bool inputs are coerced by convert_csv_value.
 		try:
-			df = pd.read_csv(csv_path, dtype=str)
+			df = load_workflow_csv(csv_path)
 			if df.empty:
 				typer.secho('Error: CSV file is empty.', fg=typer.colors.RED)
 				raise typer.Exit(code=1)
@@ -2053,12 +2052,7 @@ def run_workflow_csv_command(
 
 				# Type conversion
 				try:
-					if input_def.type.lower() == 'bool':
-						inputs[column_name] = str(raw_value).lower() in ['true', '1', 'yes', 'on']
-					elif input_def.type.lower() == 'number':
-						inputs[column_name] = float(raw_value)
-					else:  # string or default
-						inputs[column_name] = str(raw_value)
+					inputs[column_name] = convert_csv_value(raw_value, input_def.type)
 				except (ValueError, TypeError) as e:
 					typer.secho(
 						f'  Error: Cannot convert "{raw_value}" to {input_def.type} for field "{column_name}"',

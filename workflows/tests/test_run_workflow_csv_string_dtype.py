@@ -1,44 +1,57 @@
-"""Regression test for run-workflow-csv string inputs (leading-zero / numeric-looking values).
+"""Regression test for run-workflow-csv string inputs (leading zeros, NA/null tokens).
 
-Before the fix, `pd.read_csv(csv_path)` inferred numeric dtypes, so a string-typed input like a zip
-code "01234" was read as int 1234 and then `str()`-ed to "1234" (leading zero lost); a mixed column
-became floats ("1002" -> "1002.0"). The value is substituted into the workflow, so form fields were
-filled with corrupted identifiers. The fix reads with `dtype=str`.
-
-This mirrors the per-field conversion in `run_workflow_csv_command._execute_single_workflow`.
+Exercises the real helpers in workflow_use.csv_inputs that run_workflow_csv_command uses. Before the
+fix, pd.read_csv inferred numeric dtypes and applied default NA detection, so string-typed inputs
+like a zip "01234" or country code "NA" were corrupted or silently dropped. The helpers live in a
+light module so this test needs no browser_use.
 """
+
 import io
+import sys
 
 import pandas as pd
 
+from workflow_use.csv_inputs import convert_csv_value, load_workflow_csv
 
-def _convert(raw_value, field_type: str):
-    """Same per-field conversion _execute_single_workflow applies to each CSV cell."""
-    if field_type.lower() == 'bool':
-        return str(raw_value).lower() in ['true', '1', 'yes', 'on']
-    if field_type.lower() == 'number':
-        return float(raw_value)
-    return str(raw_value)  # string or default
+CSV = 'zip,code,count,flag,note\n01234,NA,1002,true,hello\n00089,null,7,false,world\n'
 
 
-CSV = "zip,count,flag,note\n01234,1002,true,hello\n00089,7,false,world\n"
-
-
-def test_string_field_keeps_leading_zeros():
-    df = pd.read_csv(io.StringIO(CSV), dtype=str)  # the fix
-    assert _convert(df.iloc[0]['zip'], 'string') == '01234'
-    assert _convert(df.iloc[1]['zip'], 'string') == '00089'
-    assert _convert(df.iloc[0]['note'], 'string') == 'hello'
+def test_string_fields_keep_exact_text():
+	df = load_workflow_csv(io.StringIO(CSV))
+	assert convert_csv_value(df.iloc[0]['zip'], 'string') == '01234'  # leading zero kept
+	assert convert_csv_value(df.iloc[1]['zip'], 'string') == '00089'
+	assert convert_csv_value(df.iloc[0]['code'], 'string') == 'NA'  # Namibia, not NaN
+	assert convert_csv_value(df.iloc[1]['code'], 'string') == 'null'  # literal, not NaN
+	assert convert_csv_value(df.iloc[0]['note'], 'string') == 'hello'
 
 
 def test_number_and_bool_fields_still_convert():
-    df = pd.read_csv(io.StringIO(CSV), dtype=str)
-    assert _convert(df.iloc[0]['count'], 'number') == 1002.0
-    assert _convert(df.iloc[0]['flag'], 'bool') is True
-    assert _convert(df.iloc[1]['flag'], 'bool') is False
+	df = load_workflow_csv(io.StringIO(CSV))
+	assert convert_csv_value(df.iloc[0]['count'], 'number') == 1002.0
+	assert convert_csv_value(df.iloc[0]['flag'], 'bool') is True
+	assert convert_csv_value(df.iloc[1]['flag'], 'bool') is False
 
 
-def test_empty_required_cell_still_detected_as_missing():
-    # dtype=str must not defeat the pd.isna() required-field check.
-    df = pd.read_csv(io.StringIO("zip,count\n,5\n"), dtype=str)
-    assert pd.isna(df.iloc[0]['zip'])
+def test_empty_required_cell_detected_missing():
+	# An empty cell must stay NaN so the caller's required-field pd.isna() check still fires.
+	df = load_workflow_csv(io.StringIO('zip,count\n,5\n'))
+	assert pd.isna(df.iloc[0]['zip'])
+
+
+def _run() -> int:
+	tests = [v for k, v in sorted(globals().items()) if k.startswith('test_') and callable(v)]
+	passed = failed = 0
+	for t in tests:
+		try:
+			t()
+			print(f'PASS: {t.__name__}')
+			passed += 1
+		except Exception as e:
+			print(f'FAIL: {t.__name__}: {e}')
+			failed += 1
+	print(f'Test Results: {passed} passed, {failed} failed')
+	return failed
+
+
+if __name__ == '__main__':
+	sys.exit(1 if _run() else 0)
