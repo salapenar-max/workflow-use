@@ -1987,7 +1987,7 @@ def run_workflow_csv_command(
 					typer.secho(f'  🚫 Consecutive failures: {count} (systematic issues)', fg=typer.colors.BRIGHT_RED)
 				elif failure_type == 'element_not_found':
 					typer.secho(f'  🔍 Element not found: {count} (form structure changed)', fg=typer.colors.RED)
-				elif failure_type == 'form_validation':
+				elif failure_type in ('form_validation', 'input_validation'):
 					typer.secho(f'  📝 Form validation: {count} (invalid input data)', fg=typer.colors.YELLOW)
 				else:
 					typer.secho(f'  ❓ Other failures: {count}', fg=typer.colors.RED)
@@ -2003,7 +2003,7 @@ def run_workflow_csv_command(
 			if 'element_not_found' in failure_types:
 				typer.secho('  • Update element selectors in workflow file', fg=typer.colors.CYAN)
 				typer.secho('  • Re-record workflow if form layout changed', fg=typer.colors.CYAN)
-			if 'form_validation' in failure_types:
+			if 'form_validation' in failure_types or 'input_validation' in failure_types:
 				typer.secho(
 					'  • Check CSV data for invalid values (missing required fields, wrong formats)', fg=typer.colors.CYAN
 				)
