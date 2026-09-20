@@ -31,3 +31,22 @@ def convert_csv_value(raw_value, field_type: str):
 	if ft == 'number':
 		return float(raw_value)
 	return str(raw_value)
+
+
+_MISSING_TOKENS = frozenset({'', 'na', 'n/a', 'null', 'none', 'nan', '<na>', '#n/a', '#na'})
+
+
+def is_missing(raw_value, field_type: str) -> bool:
+	"""Whether a CSV cell should be treated as missing (empty) for this field type.
+
+	An empty cell (NaN) is always missing. For non-string fields, common NA tokens (``NA``, ``null``,
+	``none``, ``NaN``, ...) are also missing — they cannot be a number/bool — while string fields keep
+	them as literal text (e.g. the country code ``NA`` = Namibia). This restores the pre-``dtype=str``
+	behaviour where such tokens in a numeric column were treated as missing rather than a hard
+	conversion error.
+	"""
+	if pd.isna(raw_value):
+		return True
+	if field_type.lower() != 'string' and isinstance(raw_value, str) and raw_value.strip().lower() in _MISSING_TOKENS:
+		return True
+	return False

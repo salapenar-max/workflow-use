@@ -15,12 +15,12 @@ from browser_use.llm.base import BaseChatModel
 
 from workflow_use.builder.service import BuilderService
 from workflow_use.controller.service import WorkflowController
+from workflow_use.csv_inputs import convert_csv_value, is_missing, load_workflow_csv
 from workflow_use.healing.service import HealingService
 from workflow_use.mcp.service import get_mcp_server
 from workflow_use.recorder.service import RecordingService  # Added import
 from workflow_use.storage.service import WorkflowStorageService
 from workflow_use.workflow.service import Workflow
-from workflow_use.csv_inputs import convert_csv_value, load_workflow_csv
 
 # Placeholder for recorder functionality
 # from src.recorder.service import RecorderService
@@ -2036,12 +2036,13 @@ def run_workflow_csv_command(
 				raw_value = row_data[column_name]
 
 				# Handle NaN values
-				if pd.isna(raw_value):
+				if is_missing(raw_value, input_def.type):
 					if input_def.required:
 						typer.secho(f'  Error: Required field "{column_name}" is empty in row {row_number}', fg=typer.colors.RED)
 						return {
 							'row_number': row_number,
 							'status': 'failed',
+							'failure_type': 'input_validation',
 							'error': f'Required field "{column_name}" is empty',
 							'duration': 0,
 							'steps_executed': 0,
@@ -2061,6 +2062,7 @@ def run_workflow_csv_command(
 					return {
 						'row_number': row_number,
 						'status': 'failed',
+						'failure_type': 'input_validation',
 						'error': f'Type conversion error for field "{column_name}": {e}',
 						'duration': 0,
 						'steps_executed': 0,

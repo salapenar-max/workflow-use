@@ -11,7 +11,7 @@ import sys
 
 import pandas as pd
 
-from workflow_use.csv_inputs import convert_csv_value, load_workflow_csv
+from workflow_use.csv_inputs import convert_csv_value, is_missing, load_workflow_csv
 
 CSV = 'zip,code,count,flag,note\n01234,NA,1002,true,hello\n00089,null,7,false,world\n'
 
@@ -36,6 +36,16 @@ def test_empty_required_cell_detected_missing():
 	# An empty cell must stay NaN so the caller's required-field pd.isna() check still fires.
 	df = load_workflow_csv(io.StringIO('zip,count\n,5\n'))
 	assert pd.isna(df.iloc[0]['zip'])
+
+
+def test_missing_is_type_aware():
+	# NA tokens are missing for numeric/bool fields (cannot be a number) but literal text for strings.
+	assert is_missing('NA', 'string') is False  # Namibia, kept
+	assert is_missing('null', 'string') is False
+	assert is_missing('NA', 'number') is True  # would-be numeric NA -> missing, not a hard error
+	assert is_missing('null', 'bool') is True
+	assert is_missing('01234', 'number') is False
+	assert is_missing(float('nan'), 'string') is True  # empty cell always missing
 
 
 def _run() -> int:
